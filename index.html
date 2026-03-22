@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulateur Statistique - Population</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; background: #f8f9fa; color: #333; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .header { border-bottom: 2px solid #007bff; margin-bottom: 20px; padding-bottom: 10px; }
+        .controls { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 25px; align-items: flex-end; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        select, input, button { padding: 10px; border-radius: 6px; border: 1px solid #ced4da; font-size: 1rem; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #0056b3; }
+        .btn-download { background: #28a745; display: none; }
+        .btn-download:hover { background: #218838; }
+        .stats-box { background: #e9ecef; padding: 15px; border-radius: 8px; margin: 20px 0; display: none; font-family: monospace; font-size: 1.1rem; }
+        #chart-container { position: relative; height: 450px; width: 100%; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="header">
+        <h2>Simulateur de Population (&mu; = 0)</h2>
+    </div>
+    
+    <div class="controls">
+        <div class="input-group">
+            <label>Loi de probabilité</label>
+            <select id="law">
+                <option value="normal">Normale</option>
+                <option value="uniform">Uniforme</option>
+                <option value="triangular">Triangulaire</option>
+                <option value="arcsine">Arcsinus</option>
+            </select>
+        </div>
+        
+        <div class="input-group">
+            <label>Écart-type (&sigma;) souhaité</label>
+            <input type="number" id="sigma" value="1" step="0.1" min="0.01">
+        </div>
+
+        <button onclick="generate()">Générer 200 000 valeurs</button>
+        <button id="downloadBtn" class="btn-download" onclick="downloadCSV()">Télécharger CSV (virgule)</button>
+    </div>
+
+    <div id="resultStats" class="stats-box"></div>
+    
+    <div id="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+</div>
+
+<script>
+let dataPoints = new Float64Array(200000);
+let myChart = null;
+
+// Fonction pour forcer la virgule décimale
+function formatFR(num) {
+    return num.toString().replace('.', ',');
+}
+
+function generate() {
+    const law = document.getElementById('law').value;
+    const sigma = parseFloat(document.getElementById('sigma').value);
+    const N = 200000;
+
+    for (let i = 0; i < N; i++) {
+        let val = 0;
+        const u = Math.random();
+        
+        if (law === 'normal') {
+            const u2 = Math.random();
+            val = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * u2) * sigma;
+        } else if (law === 'uniform') {
+            val = (u - 0.5) * (sigma * Math.sqrt(12));
+        } else if (law === 'triangular') {
+            val = ((Math.random() + Math.random()) - 1) * (sigma * Math.sqrt(6));
+        } else if (law === 'arcsine') {
+            val = Math.sqrt(2) * sigma * Math.sin(Math.PI * (u - 0.5));
+        }
+        dataPoints[i] = val;
+    }
+
+    processAndDisplay();
+}
+
+function processAndDisplay() {
+    // Calcul précis de la moyenne et de l'écart-type de l'échantillon
+    let sum = 0;
+    for(let v of dataPoints) sum += v;
+    const mean = sum / dataPoints.length;
+
+    let sumSqDiff = 0;
+    for(let v of dataPoints) sumSqDiff += Math.pow(v - mean, 2);
+    const realSigma = Math.sqrt(sumSqDiff / dataPoints.length);
+
+    // Affichage des statistiques
+    const statsBox = document.getElementById('resultStats');
+    statsBox.style.display = 'block';
+    statsBox.innerHTML = `<strong>Résultats de l'échantillon :</strong><br>` +
+                         `Moyenne observée : ${formatFR(mean.toFixed(6))} | ` +
+                         `Écart-type observé : ${formatFR(realSigma.toFixed(6))}`;
+    
+    document.getElementById('downloadBtn').style.display = 'inline-block';
+    
+    drawHistogram();
+}
+
+function drawHistogram() {
+    const binCount = 500;
+    let min = Infinity, max = -Infinity;
+    for(let v of dataPoints) {
+        if(v < min) min = v;
+        if(v > max) max = v;
+    }
+    
+    const range = max - min;
+    const binSize = range / binCount;
+    const bins = new Array(binCount).fill(0);
+
+    for(let v of dataPoints) {
+        let b = Math.floor((v - min) / binSize);
+        if (b >= binCount) b = binCount - 1;
+        bins[b]++;
+    }
+
+    const labels = Array.from({length: binCount}, (_, i) => formatFR((min + i * binSize).toFixed(2)));
+
+    if (myChart) myChart.destroy();
+    const ctx = document.getElementById('myChart').getContext('2d');
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Fréquence',
+                data: bins,
+                backgroundColor: '#007bff',
+                borderWidth: 0,
+                barPercentage: 1.0,
+                categoryPercentage: 1.0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { 
+                    display: true,
+                    ticks: { autoSkip: true, maxTicksLimit: 15 } 
+                },
+                y: { beginAtZero: true }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+function downloadCSV() {
+    // Construction du CSV optimisée pour 200k lignes
+    let csvContent = "\ufeffValeurs\n"; // BOM pour Excel UTF-8
+    const batchSize = 10000;
+    
+    for (let i = 0; i < dataPoints.length; i += batchSize) {
+        const chunk = dataPoints.slice(i, i + batchSize);
+        csvContent += Array.from(chunk).map(v => v.toString().replace('.', ',')).join("\n") + "\n";
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "simulation_200000_valeurs.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
