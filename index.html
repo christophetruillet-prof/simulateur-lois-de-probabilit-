@@ -27,7 +27,7 @@
 
 <div class="card">
     <div class="header">
-        <h2>Simulateur de Population (&mu; = 0)</h2>
+        <h2>Simulateur de Population Personnalisée</h2>
     </div>
     
     <div class="controls">
@@ -42,8 +42,13 @@
         </div>
         
         <div class="input-group">
-            <label>Écart-type (&sigma;) souhaité</label>
-            <input type="number" id="sigma" value="1" step="0.1" min="0.01">
+            <label>Espérance (&mu;)</label>
+            <input type="number" id="mu" value="0" step="0.1">
+        </div>
+
+        <div class="input-group">
+            <label>Écart-type (&sigma;)</label>
+            <input type="number" id="sigma" value="1" step="0.1" min="0.001">
         </div>
 
         <button onclick="generate()">Générer 200 000 valeurs</button>
@@ -68,6 +73,7 @@ function formatFR(num) {
 
 function generate() {
     const law = document.getElementById('law').value;
+    const mu = parseFloat(document.getElementById('mu').value);
     const sigma = parseFloat(document.getElementById('sigma').value);
     const N = 200000;
 
@@ -85,7 +91,9 @@ function generate() {
         } else if (law === 'arcsine') {
             val = Math.sqrt(2) * sigma * Math.sin(Math.PI * (u - 0.5));
         }
-        dataPoints[i] = val;
+        
+        // Ajout de l'espérance personnalisée
+        dataPoints[i] = val + mu;
     }
 
     processAndDisplay();
@@ -141,7 +149,7 @@ function drawHistogram() {
             datasets: [{
                 label: 'Fréquence',
                 data: bins,
-                backgroundColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.7)',
                 barPercentage: 1.0,
                 categoryPercentage: 1.0
             }]
@@ -161,27 +169,18 @@ function drawHistogram() {
 async function copyToClipboard() {
     const btn = document.getElementById('copyBtn');
     const originalText = btn.innerText;
-    
     try {
         btn.innerText = "Conversion...";
         btn.disabled = true;
-
-        // Conversion en chaîne de caractères avec virgule
-        const textToCopy = Array.from(dataPoints)
-                                .map(v => v.toString().replace('.', ','))
-                                .join('\n');
-
+        const textToCopy = Array.from(dataPoints).map(v => v.toString().replace('.', ',')).join('\n');
         await navigator.clipboard.writeText(textToCopy);
-        
         btn.style.background = "#28a745";
         btn.innerText = "Copié !";
-        
         setTimeout(() => {
             btn.style.background = "#6c757d";
             btn.innerText = originalText;
             btn.disabled = false;
         }, 2000);
-
     } catch (err) {
         alert("Erreur de copie. Utilisez le bouton CSV.");
         btn.disabled = false;
@@ -200,7 +199,7 @@ function downloadCSV() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "simulation_data.csv";
+    link.download = "simulation_complet.csv";
     link.click();
     URL.revokeObjectURL(url);
 }
